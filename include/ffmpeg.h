@@ -13,16 +13,25 @@ typedef struct
     int64_t pts;
 } ffmpeg_offset;
 
+typedef struct 
+{
+    char *filename;
+    int start_time; 
+    int end_time;
+    int cut_video; 
+}ffmpeg_file;
+
 typedef struct
 {
-    char *in_file;
+    char **in_files;
     char *out_file;
-    AVFormatContext *in_ctx, *out_ctx;
+    int n_files;
+    int start_time, end_time;
+    AVFormatContext **in_ctx;
+    AVFormatContext *out_ctx;
     AVPacket *pkt;
     ffmpeg_offset *video_offset;
     ffmpeg_offset *audio_offset;
-    int cut_video;
-    int start_time, end_time;
 } ffmpeg_wrapper;
 
-int copy_video(char *in_file, char *out_file);
+int copy_video(char **in_file, int n, char *out_file);
