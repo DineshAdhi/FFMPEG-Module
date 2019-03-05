@@ -10,6 +10,7 @@ int main()
 
     insert_video(wrapper, "/Users/dinesh-6810/Desktop/SonyTest.mp4", "/Users/dinesh-6810/Desktop/CostaRicaTest.mp4", 60);
     cut_video(wrapper, "/Users/dinesh-6810/Desktop/NewTest.mp4", -1, 60);
+    insert_video(wrapper, "/Users/dinesh-6810/Desktop/4KTest.mp4", "/Users/dinesh-6810/Desktop/CostaRicaTest.mp4", 120);
 
     execute_mux(wrapper);
 }

@@ -114,8 +114,7 @@ int *init_wrapper(ffmpeg_wrapper **wrapper, char *out_file, int n_files)
 // Fetches all the input video files declared in the wrapper. 
 // Writes all the input file frames to the output context. 
 // Keeps track of the offset at the end of each routine. 
-// Rescales the video file duration and playback 
-// with that of the original file
+// Rescales the video file duration and playback with that of the original file
 
 int write_stream(ffmpeg_wrapper *wrapper)
 {
@@ -154,6 +153,7 @@ int write_stream(ffmpeg_wrapper *wrapper)
             wrapper->video_offset->pts -= wrapper->delta_video_offset->pts;
         }
 
+        // Storing a temp offset in order to compute the delta offset later
         prev_a_offset = *wrapper->audio_offset;
         prev_v_offset = *wrapper->video_offset;
 
@@ -199,24 +199,24 @@ int write_stream(ffmpeg_wrapper *wrapper)
                     pkt.pts = pkt.dts;
                 }
 
-                if(pkt.pts < pkt.dts)
-                {
-                    pkt.pts = pkt.dts;
-                }
+                // if(pkt.pts < pkt.dts)
+                // {
+                //     pkt.pts = pkt.dts;
+                // }
 
                 if( av_write_frame(wrapper->out_ctx, &pkt) < 0 )
                 {
                     log_info("[PROBLEM WRITING FRAME][IGNORED][CURRENT DTS - %d]", out_stream->cur_dts);
                 }                
         }
-
+        
         wrapper->audio_offset->dts = last_audio_packet.dts;
         wrapper->audio_offset->pts = last_audio_packet.pts;
 
         wrapper->video_offset->dts = last_video_packet.dts;
         wrapper->video_offset->pts = last_audio_packet.pts;
 
-        if(file.cut_video == 1)                     // Each time when we cut a video, store the offset. Next time when we insert the remaining part of the video include the offset to nullify time jump.
+        if(file.cut_video == 1 && file.delta_offset == 0)       // Each time when we cut a video, store the offset. Next time when we insert the remaining part of the video include the offset to nullify time jump.
         {                                          
             wrapper->delta_audio_offset->dts = wrapper->audio_offset->dts - prev_a_offset.dts;
             wrapper->delta_audio_offset->pts = wrapper->audio_offset->pts - prev_a_offset.dts;
