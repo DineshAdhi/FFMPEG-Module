@@ -56,14 +56,9 @@ void init_streams(AVFormatContext *in_ctx, AVFormatContext *out_ctx)
     }
 }
 
-int *init_wrapper(ffmpeg_wrapper **wrapper, char **in_file, int n, char *out_file)
+int *init_wrapper(ffmpeg_wrapper **wrapper, char *out_file, int n_files)
 {
     int ret, i;
-
-    for(i=0; i<n; i++)
-    {
-        log_info("[INPUT FILE - %s][OUTPUT FILE - %s]", in_file[i], out_file);
-    }
 
     *wrapper = (ffmpeg_wrapper *) calloc(1, sizeof(ffmpeg_wrapper));
     ffmpeg_offset *a_offset = (ffmpeg_offset *) calloc(1, sizeof(ffmpeg_offset));
@@ -74,25 +69,19 @@ int *init_wrapper(ffmpeg_wrapper **wrapper, char **in_file, int n, char *out_fil
     v_offset->dts = 0;
     v_offset->pts = 0;
 
-    (*wrapper)->in_files = in_file;
     (*wrapper)->out_file = out_file;
     (*wrapper)->audio_offset = a_offset;
     (*wrapper)->video_offset = v_offset;
-    (*wrapper)->cut_video = 0;
-    (*wrapper)->start_time = -1;
-    (*wrapper)->end_time = -1;
-    (*wrapper)->n_files = n;
-    (*wrapper)->in_ctx = (AVFormatContext **) calloc(1, sizeof(AVFormatContext *));
+    (*wrapper)->n_files = 0;
+    (*wrapper)->init_streams = 0;
     (*wrapper)->out_ctx = NULL;
-
-    for(i=0; i<n; i++)
+    if(n_files == 0)
     {
-        (*wrapper)->in_ctx[i] = NULL;
-        if((ret = open_file(&(*wrapper)->in_ctx[i],in_file[i])) < 0)
-        {
-            log_error("[CAN'T OPEN FILE]");
-            return NULL;
-        }
+        (*wrapper)->in_files = (ffmpeg_file *)calloc(MAX_FILES, sizeof(ffmpeg_file));
+    }
+    else 
+    {
+        (*wrapper)->in_files = (ffmpeg_file *)calloc(n_files, sizeof(ffmpeg_file));
     }
 
     if( avformat_alloc_output_context2(&(*wrapper)->out_ctx, NULL, NULL, (*wrapper)->out_file) < 0)
@@ -100,20 +89,12 @@ int *init_wrapper(ffmpeg_wrapper **wrapper, char **in_file, int n, char *out_fil
         log_info("[ERROR WHILE ALLOCATING OUTPUT CONTEXT]");
         return NULL;
     }
-
-    init_streams((*wrapper)->in_ctx[0], (*wrapper)->out_ctx);
     
     if(avio_open(&(*wrapper)->out_ctx->pb, (*wrapper)->out_file, AVIO_FLAG_WRITE) < 0)
     {
         log_info("[ERROR WHILE OPENING OUTPUT FILE][%d]", (*wrapper)->out_file);
         return NULL;
     }
-
-    if(avformat_write_header((*wrapper)->out_ctx, NULL) < 0)
-    {
-        log_info("[ERROR WHILE WRITING HEADER OUTPUT FILE][%d]", (*wrapper)->out_file);
-        return NULL;
-    } 
 
     return NULL;
 }
@@ -127,28 +108,36 @@ int write_stream(ffmpeg_wrapper *wrapper)
 
     for(i=0; i<wrapper->n_files; i++)
     {
-        // if(wrapper->cut_video == 1 && wrapper->start_time != -1)
-        // {
-        //     if(av_seek_frame(wrapper->in_ctx[i], -1, wrapper->start_time * AV_TIME_BASE, AVSEEK_FLAG_FRAME) < 0)
-        //     {
-        //         log_info("[SEEKING FRAME][START TIME - %d]", wrapper->start_time);
-        //         return ERROR_SEEKING_FLAG;
-        //     }
-        // }
+        log_info("[INPUT FILE : %s]", wrapper->in_files[i].filename);
+    }
 
-        while(av_read_frame(wrapper->in_ctx[i], &pkt) >= 0)
+    for(i=0; i<wrapper->n_files; i++)
+    {
+        ffmpeg_file file = wrapper->in_files[i];
+
+        if(file.cut_video == 1 && file.start_time != -1)
         {
-                in_stream = wrapper->in_ctx[i]->streams[pkt.stream_index];
+            log_info("[SEEKING FRAME][START TIME - %d]", file.start_time);
+            if(av_seek_frame(file.in_ctx, -1, file.start_time * AV_TIME_BASE, AVSEEK_FLAG_FRAME) < 0)
+            {
+                return ERROR_SEEKING_FLAG;
+            }
+        }
+
+        while(av_read_frame(file.in_ctx, &pkt) >= 0)
+        {
+                in_stream = file.in_ctx->streams[pkt.stream_index];
                 out_stream = wrapper->out_ctx->streams[pkt.stream_index];
 
-                // if(wrapper->cut_video == 1 && wrapper->end_time != -1)
-                // {
-                //     if(av_q2d(in_stream->time_base) * pkt.pts > wrapper->end_time)
-                //     {
-                //         log_info("[ENDING FRAME][START TIME - %d]", wrapper->end_time);
-                //         break;
-                //     }
-                // }
+
+                if(file.cut_video == 1 && file.end_time != -1)
+                {
+                    if(av_q2d(in_stream->time_base) * pkt.pts >= file.end_time)
+                    {
+                        log_info("[ENDING FRAME][END TIME - %d]", file.end_time);
+                        break;
+                    }
+                }
 
                 if(in_stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
                 {
@@ -181,18 +170,68 @@ int write_stream(ffmpeg_wrapper *wrapper)
         wrapper->video_offset->dts = last_video_packet.dts;
         wrapper->video_offset->pts = last_audio_packet.pts;
 
-        log_info("[WRITE DONE]");
+        log_info("[WRITE DONE][%s]", file.filename);
     }
 
     return 1;
 }
 
-int copy_video(char **in_files, int n, char *out_file)
+int add_file(ffmpeg_wrapper *wrapper, ffmpeg_file *file)
 {
-    ffmpeg_wrapper *wrapper;
-    init_wrapper(&wrapper, in_files, n, out_file);
-    write_stream(wrapper);
+    wrapper->in_files[wrapper->n_files] = *file;
+    wrapper->n_files += 1;
+    //wrapper->in_files = (ffmpeg_file *) realloc(wrapper->in_files, wrapper->n_files + 1);
 
+    if(wrapper->init_streams == 0)
+    {
+        init_streams(file->in_ctx, wrapper->out_ctx);
+
+        if(avformat_write_header(wrapper->out_ctx, NULL) < 0)
+        {
+            log_info("[ERROR WHILE WRITING HEADER OUTPUT FILE][%d]", wrapper->out_file);
+            return 0;
+        } 
+        wrapper->init_streams = 1;
+    }
+
+    return 1;
+}
+
+int merge_video(ffmpeg_wrapper *wrapper, char *filename)
+{
+    ffmpeg_file *file = (ffmpeg_file *) calloc(1, sizeof(ffmpeg_file));
+    open_file(&file->in_ctx, filename);
+    file->filename = filename;
+    file->cut_video = 0;
+    file->start_time = file->end_time = -1;
+
+    return add_file(wrapper, file);
+}
+
+int cut_video(ffmpeg_wrapper *wrapper, char *filename, int start_time, int end_time)
+{
+    ffmpeg_file *file = (ffmpeg_file *) calloc(1, sizeof(ffmpeg_file));
+    open_file(&file->in_ctx, filename);
+    file->filename = filename;
+    file->cut_video = 1;
+    file->start_time = start_time;
+    file->end_time = end_time;
+
+    return add_file(wrapper, file);
+}
+
+int insert_video(ffmpeg_wrapper *wrapper, char *main_video_file, char *insert_video_file, int timestamp)
+{
+    cut_video(wrapper, main_video_file, -1, timestamp);
+    merge_video(wrapper, insert_video_file);
+    cut_video(wrapper, main_video_file, timestamp+1, -1);
+
+    return 1;
+}
+
+int execute_mux(ffmpeg_wrapper *wrapper)
+{
+    write_stream(wrapper);
     av_write_trailer(wrapper->out_ctx);
 
     return 1;

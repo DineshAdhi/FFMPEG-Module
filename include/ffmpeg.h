@@ -2,10 +2,12 @@
 #include<libavcodec/avcodec.h>
 #include<libavformat/avformat.h>
 
-#define FILE_IO_ERROR -11;
-#define FILE_STREAM_IO_ERROR -2;
-#define ERROR_WRITING_HEADER -3;
-#define ERROR_SEEKING_FLAG -4;
+#define MAX_FILES 20
+
+#define FILE_IO_ERROR -11
+#define FILE_STREAM_IO_ERROR -2
+#define ERROR_WRITING_HEADER -3
+#define ERROR_SEEKING_FLAG -4
 
 typedef struct
 {
@@ -15,23 +17,27 @@ typedef struct
 
 typedef struct 
 {
+    AVFormatContext *in_ctx;
     char *filename;
     int start_time; 
     int end_time;
     int cut_video; 
-}ffmpeg_file;
+} ffmpeg_file;
 
 typedef struct
 {
-    char **in_files;
     char *out_file;
     int n_files;
-    int start_time, end_time;
-    AVFormatContext **in_ctx;
+    int init_streams;
+    ffmpeg_file *in_files;
     AVFormatContext *out_ctx;
     AVPacket *pkt;
     ffmpeg_offset *video_offset;
     ffmpeg_offset *audio_offset;
 } ffmpeg_wrapper;
 
-int copy_video(char **in_file, int n, char *out_file);
+int merge_video(ffmpeg_wrapper *wrapper, char *filename);
+int *init_wrapper(ffmpeg_wrapper **wrapper, char *out_file, int n_files);
+int execute_mux(ffmpeg_wrapper *wrapper);
+int insert_video(ffmpeg_wrapper *wrapper, char *main_video_file, char *insert_video_file, int timestamp);
+int cut_video(ffmpeg_wrapper *wrapper, char *filename, int start_time, int end_time);
