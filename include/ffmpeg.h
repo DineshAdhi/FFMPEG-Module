@@ -22,6 +22,7 @@ typedef struct
     int start_time; 
     int end_time;
     int cut_video; 
+    int delta_offset;
 } ffmpeg_file;
 
 typedef struct
@@ -34,6 +35,8 @@ typedef struct
     AVPacket *pkt;
     ffmpeg_offset *video_offset;
     ffmpeg_offset *audio_offset;
+    ffmpeg_offset *delta_audio_offset;
+    ffmpeg_offset *delta_video_offset;
 } ffmpeg_wrapper;
 
 int merge_video(ffmpeg_wrapper *wrapper, char *filename);
