@@ -70,8 +70,6 @@ int *init_wrapper(ffmpeg_wrapper **wrapper, char *out_file, int n_files)
     *wrapper = (ffmpeg_wrapper *) calloc(1, sizeof(ffmpeg_wrapper));
     ffmpeg_offset *a_offset = (ffmpeg_offset *) calloc(1, sizeof(ffmpeg_offset));
     ffmpeg_offset *v_offset = (ffmpeg_offset *) calloc(1, sizeof(ffmpeg_offset));
-    ffmpeg_offset *delta_a_offset = (ffmpeg_offset *) calloc(1, sizeof(ffmpeg_offset));
-    ffmpeg_offset *delta_v_offset = (ffmpeg_offset *) calloc(1, sizeof(ffmpeg_offset));
 
     a_offset->dts = 0;
     a_offset->pts = 0;
@@ -84,8 +82,6 @@ int *init_wrapper(ffmpeg_wrapper **wrapper, char *out_file, int n_files)
     (*wrapper)->n_files = 0;
     (*wrapper)->init_streams = 0;
     (*wrapper)->out_ctx = NULL;
-    (*wrapper)->delta_audio_offset = delta_a_offset;
-    (*wrapper)->delta_video_offset = delta_v_offset;
 
     if(n_files == 0)
     {
@@ -116,6 +112,123 @@ int *init_wrapper(ffmpeg_wrapper **wrapper, char *out_file, int n_files)
 // Keeps track of the offset at the end of each routine. 
 // Rescales the video file duration and playback with that of the original file
 
+// int write_stream(ffmpeg_wrapper *wrapper)
+// {
+//     int i;
+
+//     AVStream *in_stream = NULL, *out_stream = NULL;
+//     AVPacket pkt, last_audio_packet, last_video_packet;
+//     ffmpeg_offset prev_a_offset, prev_v_offset;
+
+//     log_info("[NUMBER OF FILES : %d]", wrapper->n_files);
+
+//     for(i=0; i<wrapper->n_files; i++)
+//     {
+//         log_info("[INPUT FILE : %s]", wrapper->in_files[i].filename);
+//     }
+
+//     for(i=0; i<wrapper->n_files; i++)
+//     {
+//         ffmpeg_file file = wrapper->in_files[i];
+
+//         if(file.cut_video == 1 && file.start_time != -1)        // Seek frame to the start_position if cut is enabled
+//         {
+//             log_info("[SEEKING FRAME][START TIME - %d]", file.start_time);
+//             if(av_seek_frame(file.in_ctx, -1, file.start_time * AV_TIME_BASE, AVSEEK_FLAG_FRAME) < 0)
+//             {
+//                 return ERROR_SEEKING_FLAG;
+//             }
+//         }
+
+//         if(file.delta_offset == 1)
+//         {
+//             wrapper->audio_offset->dts -= wrapper->delta_audio_offset->dts;
+//             wrapper->audio_offset->pts -= wrapper->delta_audio_offset->pts;
+
+//             wrapper->video_offset->dts -= wrapper->delta_video_offset->dts;
+//             wrapper->video_offset->pts -= wrapper->delta_video_offset->pts;
+//         }
+
+//         // Storing a previous temp offset in order to compute the delta offset later
+//         prev_a_offset = *wrapper->audio_offset;
+//         prev_v_offset = *wrapper->video_offset;
+
+//         while(av_read_frame(file.in_ctx, &pkt) >= 0)
+//         {
+//                 in_stream = file.in_ctx->streams[pkt.stream_index];
+//                 out_stream = wrapper->out_ctx->streams[pkt.stream_index];
+
+//                 if(file.cut_video == 1 && file.end_time != -1)          
+//                 {
+//                     if(av_q2d(in_stream->time_base) * pkt.pts >= file.end_time)
+//                     {
+//                         log_info("[ENDING FRAME][END TIME - %d]", file.end_time);
+//                         break;
+//                     }
+//                 }
+
+//                 if(in_stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
+//                 {
+//                     pkt.dts += wrapper->audio_offset->dts;
+//                     pkt.pts += wrapper->video_offset->pts;
+
+//                     last_audio_packet = pkt;
+//                 }
+
+//                 if(in_stream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO)
+//                 {
+//                     pkt.dts += wrapper->video_offset->dts;
+//                     pkt.pts += wrapper->video_offset->pts;
+
+//                     last_video_packet = pkt;
+//                 }
+
+//                 pkt.pts = av_rescale_q_rnd(pkt.pts, in_stream->time_base, out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
+//                 pkt.dts = av_rescale_q_rnd(pkt.dts, in_stream->time_base, out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
+//                 pkt.duration = av_rescale_q(pkt.duration, in_stream->time_base, out_stream->time_base);
+//                 pkt.pos = -1;
+
+//                 if(out_stream->cur_dts >= pkt.dts)
+//                 {
+//                     log_info("[ANAMOLY FOUND][FRAME DTS - %lld][CURRENT DTS - %lld][FIXING ANAMOLY BY CHANGING DTS]", pkt.dts, out_stream->cur_dts);
+//                     pkt.dts = out_stream->cur_dts + 1;
+//                     pkt.pts = pkt.dts;
+//                 }
+
+//                 // if(pkt.pts < pkt.dts)
+//                 // {
+//                 //     pkt.pts = pkt.dts;
+//                 // }
+
+//                 if( av_write_frame(wrapper->out_ctx, &pkt) < 0 )
+//                 {
+//                     log_info("[PROBLEM WRITING FRAME][IGNORED][CURRENT DTS - %d]", out_stream->cur_dts);
+//                 }                
+//         }
+        
+//         wrapper->audio_offset->dts = last_audio_packet.dts;
+//         wrapper->audio_offset->pts = last_audio_packet.pts;
+
+//         wrapper->video_offset->dts = last_video_packet.dts;
+//         wrapper->video_offset->pts = last_audio_packet.pts;
+
+//         if(file.cut_video == 1 && file.delta_offset == 0)       // Each time when we cut a video, store the offset. Next time when we insert the remaining part of the video include the offset to nullify time jump.
+//         {                                          
+//             wrapper->delta_audio_offset->dts = wrapper->audio_offset->dts - prev_a_offset.dts;
+//             wrapper->delta_audio_offset->pts = wrapper->audio_offset->pts - prev_a_offset.dts;
+
+//             wrapper->delta_video_offset->dts = wrapper->video_offset->dts - prev_v_offset.dts;
+//             wrapper->delta_video_offset->pts = wrapper->video_offset->pts - prev_v_offset.pts;
+//         }
+
+//         log_info("[WRITE DONE][%s]", file.filename);
+//     }
+
+//     return 1;
+// }
+
+
+
 int write_stream(ffmpeg_wrapper *wrapper)
 {
     int i;
@@ -135,54 +248,51 @@ int write_stream(ffmpeg_wrapper *wrapper)
     {
         ffmpeg_file file = wrapper->in_files[i];
 
-        if(file.cut_video == 1 && file.start_time != -1)
-        {
-            log_info("[SEEKING FRAME][START TIME - %d]", file.start_time);
-            if(av_seek_frame(file.in_ctx, -1, file.start_time * AV_TIME_BASE, AVSEEK_FLAG_FRAME) < 0)
-            {
-                return ERROR_SEEKING_FLAG;
-            }
-        }
-
-        if(file.delta_offset == 1)
-        {
-            wrapper->audio_offset->dts -= wrapper->delta_audio_offset->dts;
-            wrapper->audio_offset->pts -= wrapper->delta_audio_offset->pts;
-
-            wrapper->video_offset->dts -= wrapper->delta_video_offset->dts;
-            wrapper->video_offset->pts -= wrapper->delta_video_offset->pts;
-        }
-
-        // Storing a temp offset in order to compute the delta offset later
-        prev_a_offset = *wrapper->audio_offset;
-        prev_v_offset = *wrapper->video_offset;
+        AVPacket delta_audio_pkt, delta_video_pkt;
+        delta_audio_pkt.dts = delta_audio_pkt.pts = delta_video_pkt.pts = delta_video_pkt.dts = 0;
 
         while(av_read_frame(file.in_ctx, &pkt) >= 0)
         {
                 in_stream = file.in_ctx->streams[pkt.stream_index];
                 out_stream = wrapper->out_ctx->streams[pkt.stream_index];
 
-                if(file.cut_video == 1 && file.end_time != -1)
+                if(file.cut_video == 1 && file.end_time != -1)          
                 {
                     if(av_q2d(in_stream->time_base) * pkt.pts >= file.end_time)
                     {
-                        log_info("[ENDING FRAME][END TIME - %d]", file.end_time);
+                        log_info("[ENDING FRAME][END TIME - %d]", av_q2d(in_stream->time_base) * pkt.pts);
                         break;
+                    }
+                }
+
+                if(file.cut_video == 1 && file.start_time != -1)
+                {
+                    if(av_q2d(in_stream->time_base) * pkt.pts <= file.start_time)
+                    {
+                            if(in_stream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO)
+                            {
+                                    delta_audio_pkt = pkt;
+                            }
+                            else if(in_stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
+                            {
+                                    delta_video_pkt = pkt;
+                            }
+                            continue;
                     }
                 }
 
                 if(in_stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
                 {
-                    pkt.dts += wrapper->audio_offset->dts;
-                    pkt.pts += wrapper->video_offset->pts;
+                    pkt.dts += wrapper->audio_offset->dts - delta_video_pkt.dts;
+                    pkt.pts += wrapper->audio_offset->pts - delta_video_pkt.pts;
 
                     last_audio_packet = pkt;
                 }
 
                 if(in_stream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO)
                 {
-                    pkt.dts += wrapper->video_offset->dts;
-                    pkt.pts += wrapper->video_offset->pts;
+                    pkt.dts += wrapper->video_offset->dts - delta_audio_pkt.dts;;
+                    pkt.pts += wrapper->video_offset->pts - delta_audio_pkt.pts;;
 
                     last_video_packet = pkt;
                 }
@@ -192,15 +302,10 @@ int write_stream(ffmpeg_wrapper *wrapper)
                 pkt.duration = av_rescale_q(pkt.duration, in_stream->time_base, out_stream->time_base);
                 pkt.pos = -1;
 
-                if(out_stream->cur_dts >= pkt.dts)
-                {
-                    log_info("[ANAMOLY FOUND][FRAME DTS - %lld][CURRENT DTS - %lld][FIXING ANAMOLY BY CHANGING DTS]", pkt.dts, out_stream->cur_dts);
-                    pkt.dts = out_stream->cur_dts + 1;
-                    pkt.pts = pkt.dts;
-                }
-
-                // if(pkt.pts < pkt.dts)
+                // if(out_stream->cur_dts >= pkt.dts)
                 // {
+                //     log_info("[ANAMOLY FOUND][FRAME DTS - %lld][CURRENT DTS - %lld][FIXING ANAMOLY BY CHANGING DTS]", pkt.dts, out_stream->cur_dts);
+                //     pkt.dts = out_stream->cur_dts + 1;
                 //     pkt.pts = pkt.dts;
                 // }
 
@@ -216,15 +321,6 @@ int write_stream(ffmpeg_wrapper *wrapper)
         wrapper->video_offset->dts = last_video_packet.dts;
         wrapper->video_offset->pts = last_audio_packet.pts;
 
-        if(file.cut_video == 1 && file.delta_offset == 0)       // Each time when we cut a video, store the offset. Next time when we insert the remaining part of the video include the offset to nullify time jump.
-        {                                          
-            wrapper->delta_audio_offset->dts = wrapper->audio_offset->dts - prev_a_offset.dts;
-            wrapper->delta_audio_offset->pts = wrapper->audio_offset->pts - prev_a_offset.dts;
-
-            wrapper->delta_video_offset->dts = wrapper->video_offset->dts - prev_v_offset.dts;
-            wrapper->delta_video_offset->pts = wrapper->video_offset->pts - prev_v_offset.pts;
-        }
-
         log_info("[WRITE DONE][%s]", file.filename);
     }
 
@@ -234,7 +330,7 @@ int write_stream(ffmpeg_wrapper *wrapper)
 // ----------------------------------------- Insert Strategy -------------------------------------------------------------
 
 // () ----> Denotes Frame Inserted in to the output context
-// [] ----> Context and each number represents PTS
+// [] ----> Video Context and each number enclosed in it represents PTS (or) Timestamp
 
 // Main Stream -  [ 1 2 3 4 5 6 7 8 9 10 ]
 // Insert Stream - [ 1 2 3 ]
@@ -258,6 +354,7 @@ int write_stream(ffmpeg_wrapper *wrapper)
 // A wrapper function to add file in to the ffmpeg_wrapper. 
 // We initialize streams when the first video that is added
 // If a input file contains more than two streams, it must be added first.
+
 int add_file(ffmpeg_wrapper *wrapper, ffmpeg_file *file)
 {
     wrapper->in_files[wrapper->n_files] = *file;
@@ -287,7 +384,7 @@ int merge_video(ffmpeg_wrapper *wrapper, char *filename)
     file->filename = filename;
     file->cut_video = 0;
     file->start_time = file->end_time = -1;
-    file->delta_offset = 0;
+    
 
     return add_file(wrapper, file);
 }
@@ -300,10 +397,12 @@ int cut_video(ffmpeg_wrapper *wrapper, char *filename, int start_time, int end_t
     file->cut_video = 1;
     file->start_time = start_time;
     file->end_time = end_time;
-    file->delta_offset = 0;
 
     return add_file(wrapper, file);
 }
+
+// A delta_offset_cut is used when the video that is to be merged with the output context doesn't
+// start with timestamp 0. 
 
 int cut_video_with_delta_offset(ffmpeg_wrapper *wrapper, char *filename, int start_time, int end_time)
 {
@@ -313,7 +412,6 @@ int cut_video_with_delta_offset(ffmpeg_wrapper *wrapper, char *filename, int sta
     file->cut_video = 1;
     file->start_time = start_time;
     file->end_time = end_time;
-    file->delta_offset = 1;
 
     return add_file(wrapper, file);
 }
@@ -324,7 +422,7 @@ int insert_video(ffmpeg_wrapper *wrapper, char *main_video_file, char *insert_vi
 {
     cut_video(wrapper, main_video_file, -1, timestamp);
     merge_video(wrapper, insert_video_file);
-    cut_video_with_delta_offset(wrapper, main_video_file, timestamp+1, -1);
+    cut_video(wrapper, main_video_file, timestamp+1, -1);
 
     return 1;
 }
