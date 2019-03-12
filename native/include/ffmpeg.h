@@ -41,3 +41,4 @@ int *init_wrapper(ffmpeg_wrapper **wrapper, char *out_file, int n_files);
 int execute_mux(ffmpeg_wrapper *wrapper);
 int insert_video(ffmpeg_wrapper *wrapper, char *main_video_file, char *insert_video_file, int timestamp);
 int cut_video(ffmpeg_wrapper *wrapper, char *filename, int start_time, int end_time);
+int replace_video(ffmpeg_wrapper *wrapper, char *main_video_file, char *insert_video_file, int timestamp);
