@@ -38,6 +38,7 @@ typedef struct
     int audio_stream_index;
     AVCodecContext *encode_ctx;
     AVCodecContext *decode_ctx;
+    AVFrame *frame;
 } ffmpeg_wrapper;
 
 int merge_video(ffmpeg_wrapper *wrapper, char *filename);

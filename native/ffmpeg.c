@@ -172,6 +172,7 @@ int *init_wrapper(ffmpeg_wrapper **wrapper, char *out_file, int n_files)
     (*wrapper)->out_ctx = NULL;
     (*wrapper)->video_stream_index = -1;
     (*wrapper)->audio_stream_index = -1;
+    (*wrapper)->frame = av_frame_alloc();
 
     if(n_files == 0)
     {
@@ -257,9 +258,6 @@ int write_stream(ffmpeg_wrapper *wrapper)
                 in_stream = file.in_ctx->streams[pkt.stream_index];
                 out_stream = wrapper->out_ctx->streams[pkt.stream_index];
                 enum AVMediaType mtype = in_stream->codecpar->codec_type;
-                AVFrame *frame = av_frame_alloc();
-                //frame->width = wrapper->decode_ctx->width;
-                //frame->height = wrapper->decode_ctx->height;
                 
                 if(file.cut_video == 1 && file.end_time != -1)          
                 {
@@ -270,7 +268,7 @@ int write_stream(ffmpeg_wrapper *wrapper)
                     }
                 }
 
-                if(mtype == AVMEDIA_TYPE_VIDEO && file.cut_video == 1)
+                if(mtype == AVMEDIA_TYPE_VIDEO && file.cut_video == 1 && file.start_time > 0)
                 {
 
                         int ret = avcodec_send_packet(wrapper->decode_ctx, &pkt);
@@ -281,7 +279,7 @@ int write_stream(ffmpeg_wrapper *wrapper)
                             return -1;
                         }
 
-                        ret = avcodec_receive_frame(wrapper->decode_ctx, frame);
+                        ret = avcodec_receive_frame(wrapper->decode_ctx, wrapper->frame);
 
                         if(ret < 0)
                         {
@@ -309,10 +307,10 @@ int write_stream(ffmpeg_wrapper *wrapper)
                  } 
 
                 //if(pkt.stream_index == wrapper->video_stream_index)
-                if(mtype == AVMEDIA_TYPE_VIDEO && file.cut_video == 1)
+                if(mtype == AVMEDIA_TYPE_VIDEO && file.cut_video == 1 && file.start_time > 0)
                 {
 
-                        int ret = avcodec_send_frame(wrapper->encode_ctx, frame);
+                        int ret = avcodec_send_frame(wrapper->encode_ctx, wrapper->frame);
 
                         if(ret < 0)
                         {

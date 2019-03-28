@@ -5,8 +5,8 @@ int main()
 {
     char *outfile = {"/Users/dinesh-6810/Desktop/Output/Output.webm"};
 
-    char *main = "/Users/dinesh-6810/Desktop/main.webm";
-    char *edit = "/Users/dinesh-6810/Desktop/edit.webm";
+    char *main = "/Users/dinesh-6810/Desktop/TestVideos/main.webm";
+    char *edit = "/Users/dinesh-6810/Desktop/TestVideos/edit.webm";
 
 
     /*char *outfile = {"/Users/dinesh-6810/Desktop/Output/Output.mp4"};
@@ -24,10 +24,10 @@ int main()
     // merge_video(wrapper, "/Users/dinesh-6810/Desktop/edit.webm");
     
    
-    merge_video(wrapper, main);
-    merge_video(wrapper, edit);
+    //merge_video(wrapper, main);
+    //merge_video(wrapper, edit);
 
-    //insert_video(wrapper, main, edit, 5);
+    insert_video(wrapper, main, edit, 5);
 
     //cut_video(wrapper, main, 10, 25);
 
