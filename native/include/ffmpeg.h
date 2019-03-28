@@ -34,6 +34,10 @@ typedef struct
     AVPacket *pkt;
     ffmpeg_offset *video_offset;
     ffmpeg_offset *audio_offset;
+    int video_stream_index;
+    int audio_stream_index;
+    AVCodecContext *encode_ctx;
+    AVCodecContext *decode_ctx;
 } ffmpeg_wrapper;
 
 int merge_video(ffmpeg_wrapper *wrapper, char *filename);
