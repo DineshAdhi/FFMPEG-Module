@@ -259,74 +259,76 @@ int write_stream(ffmpeg_wrapper *wrapper)
                 out_stream = wrapper->out_ctx->streams[pkt.stream_index];
                 enum AVMediaType mtype = in_stream->codecpar->codec_type;
                 
-                if(file.cut_video == 1 && file.end_time != -1)          
+                if(file.cut_video == 1)          
                 {
-                    if(av_q2d(in_stream->time_base) * pkt.pts > file.end_time)
-                    {
-                        log_info("[ENDING FRAME][END TIME - %d]", file.end_time);
-                        break;
-                    }
+                        if(file.end_time != -1)
+                        {
+                                if(av_q2d(in_stream->time_base) * pkt.pts > file.end_time)
+                                {
+                                    log_info("[ENDING FRAME][END TIME - %d]", file.end_time);
+                                    break;
+                                }
+                        }
+
+                        if(mtype == AVMEDIA_TYPE_VIDEO &&  file.start_time > 0)
+                        {
+                                int ret = avcodec_send_packet(wrapper->decode_ctx, &pkt);
+                                
+                                if(ret < 0)
+                                {
+                                    log_info("[ERROR SENDING PACKET FOR DECODING]");
+                                    return -1;
+                                }
+
+                                ret = avcodec_receive_frame(wrapper->decode_ctx, wrapper->frame);
+
+                                if(ret < 0)
+                                {
+                                    log_info("[ERROR RECEVING PACKET FOR ENCODING][%s]", av_err2str(ret));
+                                }
+                        }
+
+                        if(file.start_time != -1)
+                        {
+                                int64_t time = av_q2d(in_stream->time_base) * pkt.pts;
+
+                                if( time < file.start_time)                                        // Skip the frames until the start time is reached. 
+                                {
+                                        if(mtype == AVMEDIA_TYPE_AUDIO)
+                                        {
+                                                delta_audio_pkt = pkt;                              // Store the delta packet for offset computation purposes.
+                                        }
+                                        else if(mtype == AVMEDIA_TYPE_VIDEO)
+                                        {
+                                                delta_video_pkt = pkt;
+                                        }
+
+                                        continue;
+                                }
+                         } 
+
+                        if(mtype == AVMEDIA_TYPE_VIDEO && file.start_time > 0)
+                        {
+
+                                int ret = avcodec_send_frame(wrapper->encode_ctx, wrapper->frame);
+
+                                if(ret < 0)
+                                {
+                                        log_info("[MAIN ERROR WHILE ENCODING THE DECODED FRAME][%s][%d]", av_err2str(ret), AVERROR(ret));
+                                        return -1;
+                                }
+
+                                ret = avcodec_receive_packet(wrapper->encode_ctx, &pkt);
+
+                                if(ret < 0)
+                                {
+                                        log_info("[MAIN ERROR WHILE RECEVING THE ENCODED FRAME][%s]", av_err2str(ret));
+                                        return -1;
+                                }
+                        }
                 }
-
-                if(mtype == AVMEDIA_TYPE_VIDEO && file.cut_video == 1 && file.start_time > 0)
-                {
-
-                        int ret = avcodec_send_packet(wrapper->decode_ctx, &pkt);
-                        
-                        if(ret < 0)
-                        {
-                            log_info("[ERROR SENDING PACKET FOR DECODING]");
-                            return -1;
-                        }
-
-                        ret = avcodec_receive_frame(wrapper->decode_ctx, wrapper->frame);
-
-                        if(ret < 0)
-                        {
-                            log_info("[ERROR RECEVING PACKET FOR ENCODING][%s]", av_err2str(ret));
-                        }
-                }
-
-                if(file.cut_video == 1 && file.start_time != -1)
-                {
-                    int64_t time = av_q2d(in_stream->time_base) * pkt.pts;
-
-                    if( time < file.start_time)                                        // Skip the frames until the start time is reached. 
-                    {
-                            if(mtype == AVMEDIA_TYPE_AUDIO)
-                            {
-                                    delta_audio_pkt = pkt;                              // Store the delta packet for offset computation purposes.
-                            }
-                            else if(mtype == AVMEDIA_TYPE_VIDEO)
-                            {
-                                    delta_video_pkt = pkt;
-                            }
-
-                            continue;
-                    }
-                 } 
-
-                //if(pkt.stream_index == wrapper->video_stream_index)
-                if(mtype == AVMEDIA_TYPE_VIDEO && file.cut_video == 1 && file.start_time > 0)
-                {
-
-                        int ret = avcodec_send_frame(wrapper->encode_ctx, wrapper->frame);
-
-                        if(ret < 0)
-                        {
-                                log_info("[MAIN ERROR WHILE ENCODING THE DECODED FRAME][%s][%d]", av_err2str(ret), AVERROR(ret));
-                                return -1;
-                        }
-
-                        ret = avcodec_receive_packet(wrapper->encode_ctx, &pkt);
-
-                        if(ret < 0)
-                        {
-                                log_info("[MAIN ERROR WHILE RECEVING THE ENCODED FRAME][%s]", av_err2str(ret));
-                                return -1;
-                        }
-                }
-
+   
+   
                 if(mtype == AVMEDIA_TYPE_VIDEO)
                 {
                     pkt.dts += wrapper->video_offset->dts - delta_video_pkt.dts;            
